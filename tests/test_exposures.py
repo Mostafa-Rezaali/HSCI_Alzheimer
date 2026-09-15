@@ -11,6 +11,12 @@ import exposures as e
 
 
 class Windows(unittest.TestCase):
+    def test_zip_normalization(self):
+        for value in ('', ' ', 'invalid', None, np.nan, pd.NA):
+            self.assertIsNone(e.normalize_zip(value))
+        for value in ('01234', '1234', '1234.0', 1234.0):
+            self.assertEqual(e.normalize_zip(value), '01234')
+
     def test_calendar_and_missing(self):
         self.assertEqual(len(e.summer_dates(pd.Timestamp('2020-06-01'),pd.Timestamp('2020-06-01'))),0)
         end = pd.Timestamp('2020-02-29')
@@ -48,13 +54,24 @@ class Windows(unittest.TestCase):
                                 ds.createVariable(axis,'f8',(axis,))[:]=coords
                             ds.createVariable('HI_EXCDMAG','f4',('lat','lon','time'))[:]=value
             pd.DataFrame({'postal code':['01234'],'latitude':[30.],'longitude':[-82.]}).to_csv(root/'USZipsWithLatLon_20231227.csv',index=False)
-            pd.DataFrame({'ID':['001','002','003','004'], 'zip5':['01234','99999','01234','01234'],
-                          'MCI_DATE':['2019-06-01']*4,'AD_DATE':['2020-07-01','2020-07-01','','2018-01-01']}).to_csv(root/'patients.csv',index=False)
+            pd.DataFrame({'ID':['001','002','003','004','005','006'],
+                          'zip5':['01234','99999','01234','01234','','invalid'],
+                          'MCI_DATE':['2019-06-01']*6,
+                          'AD_DATE':['2020-07-01','2020-07-01','','2018-01-01','2020-07-01','2020-07-01']}).to_csv(root/'patients.csv',index=False)
             subprocess.run([sys.executable,str(Path(e.__file__)), '--data-dir',str(root),
                             '--patient-csv','patients.csv','--workers','2'],check=True,capture_output=True,text=True)
             for pct,value in [(90,2.),(95,1.)]:
                 table=pd.read_csv(root/'HSCI_Alzheimer_outputs'/f'MCI_AD_exposures_{pct}.csv',dtype={'ID':str,'zip5':str})
                 annual=pd.read_csv(root/'HSCI_Alzheimer_outputs'/f'MCI_AD_summers_{pct}.csv')
+                self.assertEqual(len(table),6)
+                self.assertEqual(table.source_row.tolist(),list(range(2,8)))
+                for i in (4,5):
+                    self.assertTrue(pd.isna(table.iloc[i].zip5))
+                    self.assertEqual(table.iloc[i].zip_linked,0)
+                    self.assertTrue(np.isnan(table.iloc[i].heatwave_days_mci_to_ad))
+                    self.assertEqual(table.iloc[i].HSCIH_accumulated_mci_to_ad,
+                                     table.iloc[0].HSCIH_accumulated_mci_to_ad)
+                    self.assertTrue(annual[annual.source_row==i+2].heatwave_days.isna().all())
                 self.assertEqual(table.iloc[0].ID,'001')
                 self.assertEqual(table.iloc[0].zip5,'01234')
                 self.assertTrue(np.isnan(table.iloc[1].heatwave_days_mci_to_ad))

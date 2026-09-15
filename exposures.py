@@ -123,7 +123,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     mci = pd.to_datetime(patients[args.mci_col], format=args.date_format, errors='coerce').dt.normalize()
     ad = pd.to_datetime(patients[args.ad_col], format=args.date_format, errors='coerce').dt.normalize()
-    zips = patients[args.zip_col].map(normalize_zip)
+    # Avoid pandas coercing missing normalized ZIPs from None to float NaN.
+    zips = [normalize_zip(value) for value in patients[args.zip_col]]
     unique_zips = sorted(set(z for z in zips if z is not None))
     for pct in pct_list:
         mag = args.data_dir / args.mag_template.format(pct=pct)
