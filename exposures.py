@@ -56,8 +56,8 @@ def zip_daily(task):
                     hw[i] = 0
                 else:
                     v = source.read_zip_avg(mag, 'HI_EXCDMAG', index, mask, day, False)
-                    if np.isfinite(v):
-                        hw[i] = int(v > 0)
+                    # Upstream MAG is sparse: non-exceedances are NaN.
+                    hw[i] = int(np.isfinite(v) and v > 0)
         return zc, pd.DataFrame({'hsci': hsci, 'hw': hw}, index=dates)
     finally:
         for ds in source._NC_DATASET_CACHE.values():

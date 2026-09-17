@@ -8,9 +8,33 @@ import netCDF4
 import numpy as np
 import pandas as pd
 import exposures as e
+from repair_hw_columns import repair_frame
 
 
 class Windows(unittest.TestCase):
+    def test_legacy_repair(self):
+        dates = pd.date_range('2019-05-01', periods=4)
+        domain = np.array([False, True, True, True])
+        original = pd.DataFrame([dict(source_row='2', start='2019-05-01',
+            end_exclusive='2019-05-05', hw_observed_days='2', hw_complete='0',
+            heatwave_days='', HSCIH_accumulated='12.345')])
+        fixed = repair_frame(original, dates, domain, {'2': True}, annual=True)
+        self.assertEqual(fixed.loc[0, 'heatwave_days'], '1')
+        self.assertEqual(fixed.loc[0, 'hw_complete'], '1')
+        self.assertEqual(fixed.loc[0, 'hw_observed_days'], '4')
+        self.assertEqual(fixed.loc[0, 'HSCIH_accumulated'], '12.345')
+        pd.testing.assert_frame_equal(fixed, repair_frame(fixed, dates, domain, {'2': True}, True))
+        pd.testing.assert_frame_equal(original, repair_frame(original, dates, domain, {'2': False}, True))
+
+    def test_sparse_magnitudes(self):
+        from unittest.mock import patch
+        dates = pd.date_range('2019-05-01', periods=4)
+        with patch.object(e.source, 'read_zip_avg', side_effect=[np.nan, 2., np.nan]):
+            _, daily = e.zip_daily(('01234', object(), 'unused', dates,
+                                   np.ones(4), [False, True, True, True]))
+        self.assertEqual(daily.hw.tolist(), [0., 0., 1., 0.])
+        self.assertEqual(e.summarize(dates[0], dates[-1]+pd.Timedelta(days=1), daily)['heatwave_days'], 1)
+
     def test_zip_normalization(self):
         for value in ('', ' ', 'invalid', None, np.nan, pd.NA):
             self.assertIsNone(e.normalize_zip(value))

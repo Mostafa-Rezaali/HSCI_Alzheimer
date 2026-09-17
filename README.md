@@ -115,3 +115,23 @@ zero accumulated exposure. For complete intervals, annual totals reconcile with
 the MCI-to-AD total (within floating point summation tolerance).
 
 Run tests with `python -m unittest discover -s tests -v`.
+# Repairing legacy empty heatwave counts
+
+`repair_hw_columns.py` repairs CSVs produced before the sparse-MAG fix.
+The original MAG writer stores only positive exceedances; other values are
+NaN. The old exposure code incorrectly treated those non-exceedances as
+missing observations, then suppressed window totals. The repair subtracts
+the number of non-domain-heatwave dates from saved `hw_observed_days` to
+recover the positive local heatwave-day count. This reproduces the upstream
+finite-and-positive rule without rereading spatial grids. It does not turn
+unlinked ZIPs or dates outside the climate time axis into known exposures.
+The sparse product cannot distinguish genuinely unavailable local source
+data from non-exceedance; this limitation also applies to upstream counts.
+
+Submit `submit_repair_hw.slurm` from HiPerGator after pulling. Defaults read
+`400M_PRISM/HSCI_Alzheimer_outputs` and write separate files to
+`400M_PRISM/HSCI_Alzheimer_outputs_HW_fixed`. Override `INPUT_DIR` if needed.
+Only `heatwave_days*`, `hw_observed_days*`, and `hw_complete*` change; every
+other field is checked for equality as strings. Originals are preserved.
+Use the same climate products used in the original run. This lightweight
+repair requests one CPU, 8 GB, and one hour; it reads time axes and HSCI only.
